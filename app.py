@@ -1,13 +1,16 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import traceback
-
-from financial_engine import calculate_loan_structure, FinancialRequest, FinancialOutput
 from feasibility_engine import generate_hyperlocal_feasibility, FeasibilityRequest
+from financial_engine import calculate_financial_terms, FinancialRequest
 
-app = FastAPI(title="Hyper-Local Business Advisory API")
+app = FastAPI(
+    title="Rural Fintech Engine",
+    description="API for hyper-local feasibility analysis and financial structuring.",
+    version="1.0.0"
+)
 
+# Enable CORS so Netlify and any client domain can call this API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -16,41 +19,45 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Added 'state' to the request model
-class FullAssessmentRequest(BaseModel):
+class EnterpriseAssessmentRequest(BaseModel):
     state: str
     district: str
     block: str
-    village: str = ""
     margin_capital: float
     business_category: str
-    language: str = "en"
+
+@app.get("/")
+def health_check():
+    return {
+        "status": "online",
+        "service": "Rural Fintech Engine API",
+        "docs_url": "/docs"
+    }
 
 @app.post("/api/v1/assess-enterprise")
-def assess_enterprise(req: FullAssessmentRequest):
+def assess_enterprise(req: EnterpriseAssessmentRequest):
     try:
-        fin_req = FinancialRequest(margin_capital=req.margin_capital, business_category=req.business_category)
-        fin_data = calculate_loan_structure(fin_req)
-
-        # Passed 'state' into the feasibility engine
-        feasibility_req = FeasibilityRequest(
-            state=req.state,
-            district=req.district, 
-            block=req.block, 
-            business_category=req.business_category, 
-            total_project_cost=fin_data.total_project_cost
+        # 1. Compute financial structuring based on margin capital and business sector
+        fin_req = FinancialRequest(
+            margin_capital=req.margin_capital,
+            business_category=req.business_category
         )
-        feasibility_data = generate_hyperlocal_feasibility(feasibility_req)
+        financial_data = calculate_financial_terms(fin_req)
+
+        # 2. Extract total project cost and generate hyper-local feasibility
+        total_project_cost = financial_data.get("total_project_cost", req.margin_capital * 10)
+        feas_req = FeasibilityRequest(
+            state=req.state,
+            district=req.district,
+            block=req.block,
+            business_category=req.business_category,
+            total_project_cost=total_project_cost
+        )
+        feasibility_data = generate_hyperlocal_feasibility(feas_req)
 
         return {
-            "financial_structuring": fin_data.dict(),
-            "feasibility_report": feasibility_data
+            "feasibility_report": feasibility_data,
+            "financial_structuring": financial_data
         }
     except Exception as e:
-        print("\n🚨 ERROR TRIGGERED 🚨")
-        traceback.print_exc()
-        raise HTTPException(status_code=400, detail=str(e))
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("app:app", host="127.0.0.1", port=8000, reload=True)
+        raise HTTPException(status_code=500, detail=str(e))
