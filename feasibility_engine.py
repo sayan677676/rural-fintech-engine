@@ -15,7 +15,7 @@ class FeasibilityRequest(BaseModel):
     total_project_cost: float
 
 def generate_hyperlocal_feasibility(req: FeasibilityRequest) -> dict:
-    model = genai.GenerativeModel('gemini-3.5-flash')
+    model = genai.GenerativeModel("gemini-2.5-flash")
     
     prompt = f"""
 You are an expert institutional rural micro-enterprise consultant and economic data analyst.
